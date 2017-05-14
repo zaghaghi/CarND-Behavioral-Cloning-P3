@@ -42,30 +42,31 @@ class DataGenerator:
         '''
         read image path and steering data from csv files in dir_lists
         '''
+        data = []
         for item in dir_list:
             csv_filename = os.path.join(item, 'driving_log.csv')
             if not os.path.exists(csv_filename):
+                print ("path not exists{}".format(csv_filename))
                 continue
             with open(csv_filename) as csv_file:
                 reader = csv.reader(csv_file)
-                data = []
                 for row in reader:
                     # center image and its steering
-                    data.append(Data(os.path.join(item, row[0]), float(row[3])))
+                    data.append(Data(os.path.join(item, row[0].strip()), float(row[3])))
                     # left image and its steering
-                    data.append(Data(os.path.join(item, row[1]),
+                    data.append(Data(os.path.join(item, row[1].strip()),
                                      float(row[3]) + self.steering_correction))
                     # right image and its steering
-                    data.append(Data(os.path.join(item, row[2]),
+                    data.append(Data(os.path.join(item, row[2].strip()),
                                      float(row[3]) - self.steering_correction))
 
                     # center flipped image and its steering
-                    data.append(Data(os.path.join(item, row[0]), float(row[3]), True))
+                    data.append(Data(os.path.join(item, row[0].strip()), float(row[3]), True))
                     # left flipped image and its steering
-                    data.append(Data(os.path.join(item, row[1]),
+                    data.append(Data(os.path.join(item, row[1].strip()),
                                      float(row[3]) + self.steering_correction, True))
                     # right flipped image and its steering
-                    data.append(Data(os.path.join(item, row[2]),
+                    data.append(Data(os.path.join(item, row[2].strip()),
                                      float(row[3]) - self.steering_correction, True))
         data = shuffle(data)
         self.train_data, self.valid_data =\
@@ -84,6 +85,8 @@ class DataGenerator:
                 batch_images_data = []
                 for d in batch_data:
                     img_data = cv2.imread(d.image_path)
+                    if img_data is None:
+                        print(d.image_path)
                     steering = d.steering
                     if d.flip:
                         steering = -d.steering
@@ -161,7 +164,7 @@ def main():
                 if os.path.isdir(os.path.join('data', d))]
     data_gen = DataGenerator(data_dir)
     model = Model(data_gen)
-    model.train_save('model.v2.h5', epochs=4)
+    model.train_save('model.v2.h5', epochs=2)
 
 if __name__ == '__main__':
     main()
