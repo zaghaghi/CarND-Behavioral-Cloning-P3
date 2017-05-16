@@ -7,11 +7,14 @@ from sklearn.utils import shuffle
 from sklearn.model_selection import train_test_split
 import numpy as np
 import cv2
+import h5py
 os.environ['KERAS_BACKEND'] = 'tensorflow'
 from keras.models import Sequential
 from keras.layers import Dense, Flatten, Lambda, Dropout
 from keras.layers.convolutional import Convolution2D, Cropping2D
 from keras.layers.pooling import MaxPool2D
+from keras.models import load_model
+from keras import __version__ as keras_version
 import click
 
 class Data:
@@ -120,12 +123,16 @@ class Model:
     '''
     This class contains model implementation in keras
     '''
-    def __init__(self, data_gen):
+    def __init__(self, data_gen, input_model=None):
         '''Constructor'''
         self.data_gen = data_gen
         self.model = None
-        self.build_model()
         self.filename = None
+        if not os.path.exists(input_model):
+            self.build_model()
+        else:
+            self.load_model(input_model)
+
         self._get_next_filename()
 
     def _get_next_filename(self):
@@ -154,6 +161,19 @@ class Model:
         self.model.add(Dense(50))
         self.model.add(Dense(1))
 
+    def load_model(self, input_model):
+        '''Load a pretrained model'''
+        input_model_file = h5py.File(input_model, mode='r')
+        model_ver = input_model_file.attrs.get('keras_version')
+        keras_ver = str(keras_version).encode('utf8')
+
+        if model_ver != keras_ver:
+            print('You are using Keras version ', keras_ver,
+                  ', but the model was built using ', model_ver)
+
+        self.model = load_model(input_model)
+
+
     def train_save(self, loss='mse', optimizer='adam', epochs=10, batch_size=32):
         '''
         Train the model and save it to output filename
@@ -174,14 +194,15 @@ class Model:
 @click.option('--epochs', default=10, help='Number of epochs.', prompt='Number of epochs')
 @click.option('--input-dir', default='data', help='Input directory of saved simulations.', prompt='Input directory')
 @click.option('--batch-size', default=32, help='Batch size', prompt='Batch size')
-def main(epochs, input_dir, batch_size):
+@click.option('--input-model', default='', help='Input model', prompt='Input model')
+def main(epochs, input_dir, batch_size, input_model):
     '''
     main function
     '''
     data_dir = [os.path.join(input_dir, d) for d in os.listdir(input_dir)
                 if os.path.isdir(os.path.join(input_dir, d))]
     data_gen = DataGenerator(data_dir)
-    model = Model(data_gen)
+    model = Model(data_gen, input_model)
     model.train_save(epochs=epochs, batch_size=batch_size)
 
 if __name__ == '__main__':
