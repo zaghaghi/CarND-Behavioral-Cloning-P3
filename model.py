@@ -12,7 +12,7 @@ from keras.models import Sequential
 from keras.layers import Dense, Flatten, Lambda, Dropout
 from keras.layers.convolutional import Convolution2D, Cropping2D
 from keras.layers.pooling import MaxPool2D
-
+import click
 
 class Data:
     '''
@@ -30,12 +30,13 @@ class DataGenerator:
     '''
     steering_correction = 0.2
 
-    def __init__(self, dir_list, valid_split=0.2):
+    def __init__(self, dir_list, color_mode=cv2.COLOR_BGR2YUV, valid_split=0.2):
         '''
         contructor
         '''
         self.train_data = []
         self.valid_data = []
+        self.color_mode = color_mode
         self._read_image_list(dir_list, valid_split)
 
     def _read_image_list(self, dir_list, valid_split):
@@ -85,6 +86,7 @@ class DataGenerator:
                 batch_images_data = []
                 for d in batch_data:
                     img_data = cv2.imread(d.image_path)
+                    img_data = cv2.cvtColor(img_data, self.color_mode)
                     if img_data is None:
                         print(d.image_path)
                     steering = d.steering
@@ -123,6 +125,17 @@ class Model:
         self.data_gen = data_gen
         self.model = None
         self.build_model()
+        self.filename = None
+        self._get_next_filename()
+
+    def _get_next_filename(self):
+        '''Finds a valid name for model output name'''
+        filename = 'model.v{}.h5'
+        ver = 0
+        while os.path.exists(filename.format(ver)):
+            ver += 1
+        self.filename = filename.format(ver)
+        print("save result model to {}".format(self.filename))
 
     def build_model(self):
         ''' Build model '''
@@ -130,17 +143,18 @@ class Model:
         self.model.add(Cropping2D(cropping=((50, 20), (0, 0)),
                                   input_shape=(160, 320, 3)))
         self.model.add(Lambda(lambda x: x / 255.0 - 0.5))
-        self.model.add(Convolution2D(32, kernel_size=(3, 3), activation='relu'))
-        self.model.add(MaxPool2D(pool_size=(2, 2)))
+        self.model.add(Convolution2D(24, kernel_size=(5, 5), strides=(2, 2), activation='relu'))
+        self.model.add(Convolution2D(36, kernel_size=(5, 5), strides=(2, 2), activation='relu'))
+        self.model.add(Convolution2D(48, kernel_size=(5, 5), strides=(2, 2), activation='relu'))
         self.model.add(Convolution2D(64, kernel_size=(3, 3), activation='relu'))
-        self.model.add(MaxPool2D(pool_size=(2, 2)))
-        self.model.add(Dropout(0.25))
+        self.model.add(Convolution2D(64, kernel_size=(3, 3), activation='relu'))
         self.model.add(Flatten())
-        self.model.add(Dense(128))
-        self.model.add(Dense(64))
+        self.model.add(Dense(1200))
+        self.model.add(Dense(100))
+        self.model.add(Dense(50))
         self.model.add(Dense(1))
 
-    def train_save(self, output, loss='mse', optimizer='adam', epochs=7, batch_size=32):
+    def train_save(self, loss='mse', optimizer='adam', epochs=10, batch_size=32):
         '''
         Train the model and save it to output filename
         '''
@@ -153,18 +167,22 @@ class Model:
                                  validation_data=valid_generator,
                                  validation_steps=self.data_gen.get_valid_size()/batch_size,
                                  epochs=epochs)
-        self.model.save(output)
+        self.model.save(self.filename)
 
 
-def main():
+@click.command()
+@click.option('--epochs', default=10, help='Number of epochs.', prompt='Number of epochs')
+@click.option('--input-dir', default='data', help='Input directory of saved simulations.', prompt='Input directory')
+@click.option('--batch-size', default=32, help='Batch size', prompt='Batch size')
+def main(epochs, input_dir, batch_size):
     '''
     main function
     '''
-    data_dir = [os.path.join('data', d) for d in os.listdir('data')
-                if os.path.isdir(os.path.join('data', d))]
+    data_dir = [os.path.join(input_dir, d) for d in os.listdir(input_dir)
+                if os.path.isdir(os.path.join(input_dir, d))]
     data_gen = DataGenerator(data_dir)
     model = Model(data_gen)
-    model.train_save('model.v2.h5', epochs=2, batch_size=256)
+    model.train_save(epochs=epochs, batch_size=batch_size)
 
 if __name__ == '__main__':
     main()
