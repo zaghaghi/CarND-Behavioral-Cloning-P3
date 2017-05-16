@@ -140,18 +140,18 @@ class Model:
         self.model.add(Dense(64))
         self.model.add(Dense(1))
 
-    def train_save(self, output, loss='mse', optimizer='adam', epochs=7):
+    def train_save(self, output, loss='mse', optimizer='adam', epochs=7, batch_size=32):
         '''
         Train the model and save it to output filename
         '''
-        train_generator = self.data_gen.get_train_data(batch_size=128)
-        valid_generator = self.data_gen.get_valid_data(batch_size=128)
+        train_generator = self.data_gen.get_train_data(batch_size=batch_size)
+        valid_generator = self.data_gen.get_valid_data(batch_size=batch_size)
 
         self.model.compile(loss=loss, optimizer=optimizer)
         self.model.fit_generator(train_generator,
-                                 steps_per_epoch=self.data_gen.get_train_size(),
+                                 steps_per_epoch=self.data_gen.get_train_size()/batch_size,
                                  validation_data=valid_generator,
-                                 validation_steps=self.data_gen.get_valid_size(),
+                                 validation_steps=self.data_gen.get_valid_size()/batch_size,
                                  epochs=epochs)
         self.model.save(output)
 
@@ -164,7 +164,7 @@ def main():
                 if os.path.isdir(os.path.join('data', d))]
     data_gen = DataGenerator(data_dir)
     model = Model(data_gen)
-    model.train_save('model.v2.h5', epochs=2)
+    model.train_save('model.v2.h5', epochs=2, batch_size=256)
 
 if __name__ == '__main__':
     main()
