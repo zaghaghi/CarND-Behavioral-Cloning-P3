@@ -14,7 +14,9 @@ from keras.layers import Dense, Flatten, Lambda, Dropout
 from keras.layers.convolutional import Convolution2D, Cropping2D
 from keras.layers.pooling import MaxPool2D
 from keras.models import load_model
+from keras.optimizers import Adam
 from keras import __version__ as keras_version
+from keras.utils import plot_model
 import click
 
 class Data:
@@ -48,9 +50,12 @@ class DataGenerator:
         '''
         data = []
         for item in dir_list:
+            if os.path.split(item)[-1].startswith('_'):
+                print("skipping directory {}".format(item))
+                continue
             csv_filename = os.path.join(item, 'driving_log.csv')
             if not os.path.exists(csv_filename):
-                print ("path not exists{}".format(csv_filename))
+                print("path not exists {}".format(csv_filename))
                 continue
             with open(csv_filename) as csv_file:
                 reader = csv.reader(csv_file)
@@ -89,9 +94,9 @@ class DataGenerator:
                 batch_images_data = []
                 for d in batch_data:
                     img_data = cv2.imread(d.image_path)
-                    img_data = cv2.cvtColor(img_data, self.color_mode)
                     if img_data is None:
                         print(d.image_path)
+                    img_data = cv2.cvtColor(img_data, self.color_mode)
                     steering = d.steering
                     if d.flip:
                         steering = -d.steering
@@ -123,11 +128,12 @@ class Model:
     '''
     This class contains model implementation in keras
     '''
-    def __init__(self, data_gen, input_model=None):
+    def __init__(self, data_gen, input_model=None, learning_rate=0.001):
         '''Constructor'''
         self.data_gen = data_gen
         self.model = None
         self.filename = None
+        self.learning_rate = learning_rate
         if not os.path.exists(input_model):
             self.build_model()
         else:
@@ -159,6 +165,7 @@ class Model:
         self.model.add(Dense(1200))
         self.model.add(Dense(100))
         self.model.add(Dense(50))
+        self.model.add(Dropout(0.2))
         self.model.add(Dense(1))
 
     def load_model(self, input_model):
@@ -174,36 +181,49 @@ class Model:
         self.model = load_model(input_model)
 
 
-    def train_save(self, loss='mse', optimizer='adam', epochs=10, batch_size=32):
+    def train_save(self, loss='mse', epochs=10, batch_size=32):
         '''
         Train the model and save it to output filename
         '''
         train_generator = self.data_gen.get_train_data(batch_size=batch_size)
         valid_generator = self.data_gen.get_valid_data(batch_size=batch_size)
 
+        optimizer = Adam(lr=self.learning_rate)
         self.model.compile(loss=loss, optimizer=optimizer)
+
         self.model.fit_generator(train_generator,
                                  steps_per_epoch=self.data_gen.get_train_size()/batch_size,
                                  validation_data=valid_generator,
                                  validation_steps=self.data_gen.get_valid_size()/batch_size,
                                  epochs=epochs)
         self.model.save(self.filename)
+        print("Model saved in {}".format(self.filename))
+
+    def visualize(self, filename):
+        ''' visualize model architecture '''
+        plot_model(self.model, to_file=filename, show_shapes=True)
 
 
 @click.command()
 @click.option('--epochs', default=10, help='Number of epochs.', prompt='Number of epochs')
-@click.option('--input-dir', default='data', help='Input directory of saved simulations.', prompt='Input directory')
+@click.option('--input-dir', default='data', help='Input directory of saved simulations.',
+              prompt='Input directory')
 @click.option('--batch-size', default=32, help='Batch size', prompt='Batch size')
 @click.option('--input-model', default='', help='Input model', prompt='Input model')
-def main(epochs, input_dir, batch_size, input_model):
+@click.option('--learning-rate', default=0.001, help='Learning rate', prompt='Learning rate')
+@click.option('--output-model-image', default='', help='Output filename to save model architecture')
+def main(epochs, input_dir, batch_size, input_model, learning_rate, output_model_image):
     '''
     main function
     '''
     data_dir = [os.path.join(input_dir, d) for d in os.listdir(input_dir)
                 if os.path.isdir(os.path.join(input_dir, d))]
     data_gen = DataGenerator(data_dir)
-    model = Model(data_gen, input_model)
-    model.train_save(epochs=epochs, batch_size=batch_size)
+    model = Model(data_gen, input_model, learning_rate)
+    if output_model_image != '':
+        model.visualize(output_model_image)
+    else:
+        model.train_save(epochs=epochs, batch_size=batch_size)
 
 if __name__ == '__main__':
     main()
