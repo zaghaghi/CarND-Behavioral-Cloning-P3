@@ -31,6 +31,7 @@ My project includes the following files:
 * model.py containing the script to create and train the model
 * drive.py for driving the car in autonomous mode
 * model.h5 containing a trained convolution neural network 
+    * because of github.com file limitation (100MB), I split model.h5 into two parts model.h5.tar.001 and model.h5.tar.002
 * writeup_report.md or writeup_report.pdf summarizing the results
 
 #### 2. Submission includes functional code
